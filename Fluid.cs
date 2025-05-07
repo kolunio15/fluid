@@ -2,13 +2,33 @@
 using System.Numerics;
 using System.Text;
 
-const int width  = 64;
-const int height = 64;
+void LoadImage(int w, int h, string path, Grid<float> red, Grid<float> green, Grid<float> blue) {
+    Image image = Raylib.LoadImage(path);
+
+    Raylib.ImageResize(ref image, w, h);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            int c = x + 1;
+            int r = y + 1;
+
+            var colour = Raylib.GetImageColor(image, x, y);
+            red[c, r]   += colour.R / (float)byte.MaxValue;
+            green[c, r] += colour.G / (float)byte.MaxValue;
+            blue[c, r]  += colour.B / (float)byte.MaxValue;
+        }
+    }    
+}
+
+const float fixedUpdatesPerSecond = 60.0f;
+const int iteration_count = 12;
+
+const int width  = 100;
+const int height = 100;
 
 const int width_with_border  = width + 2;
 const int height_with_border = height + 2;
 
-const float density_diffusion_rate = 5.5f;
+const float density_diffusion_rate = 0.0f;
 const float velocity_viscosity_rate = 2.5f;
 
 static void SetBoundary(Grid<bool> wall, BoundaryMode mode, int w, int h, Grid<float> in_out) {
@@ -78,7 +98,7 @@ static void SetBoundary(Grid<bool> wall, BoundaryMode mode, int w, int h, Grid<f
     in_out[w + 1, h + 1] = 0.5f * (in_out[w, h + 1] + in_out[w + 1, h]);   
 }
 
-const int iteration_count = 20;
+
 static void Diffuse(Grid<bool> wall, BoundaryMode mode, int w, int h, float dt, float diffusion_rate, Grid<float> input, Grid<float> output) {
     float a = dt * diffusion_rate; // a = dt * diff * w * h
 
@@ -184,19 +204,30 @@ static void Project(Grid<bool> wall, int w, int h, Grid<float> velocityX, Grid<f
 }
 
 Grid<bool> wall       = new(width_with_border, height_with_border, false);
-Grid<float> density   = new(width_with_border, height_with_border, 0);
+Grid<float> densityR  = new(width_with_border, height_with_border, 0);
+Grid<float> densityG  = new(width_with_border, height_with_border, 0);
+Grid<float> densityB  = new(width_with_border, height_with_border, 0);
+
+
 Grid<float> velocityX = new(width_with_border, height_with_border, 0);
 Grid<float> velocityY = new(width_with_border, height_with_border, 0);
 Grid<float> tempX     = new(width_with_border, height_with_border, 0);
 Grid<float> tempY     = new(width_with_border, height_with_border, 0);
 
 
-void Simulate(float dt) {
-    Diffuse(wall, BoundaryMode.Normal, width, height, dt, density_diffusion_rate, density, tempX);
-    (density, tempX) = (tempX, density);
-    Advect(wall, BoundaryMode.Normal, width, height, dt, velocityX, velocityY, density, tempX);
-    (density, tempX) = (tempX, density);
 
+void Simulate(float dt) {
+    void DiffuseStep(ref Grid<float> density, ref Grid<float> tempX) {
+        Diffuse(wall, BoundaryMode.Normal, width, height, dt, density_diffusion_rate, density, tempX);
+        (density, tempX) = (tempX, density);
+        Advect(wall, BoundaryMode.Normal, width, height, dt, velocityX, velocityY, density, tempX);
+        (density, tempX) = (tempX, density);
+    }
+
+    DiffuseStep(ref densityR, ref tempX);
+    DiffuseStep(ref densityG, ref tempX);
+    DiffuseStep(ref densityB, ref tempX);
+    
     Diffuse(wall, BoundaryMode.VelocityX, width, height, dt, velocity_viscosity_rate, velocityX, tempX);
     Diffuse(wall, BoundaryMode.VelocityY, width, height, dt, velocity_viscosity_rate, velocityY, tempY);
     (velocityX, tempX) = (tempX, velocityX);
@@ -220,7 +251,7 @@ float densityAddedPerSecond  = 100.0f;
 float velocityAddedPerSecond = 10000.0f;
 
 bool showHelp = true;
-bool showGrid = true;
+bool showGrid = false;
 bool showVelocityField = true;
 
 string helpText = 
@@ -276,7 +307,7 @@ while (!Raylib.WindowShouldClose()) {
         if (Raylib.IsKeyPressed(KeyboardKey.R)) {
             for (int y = 0; y < height_with_border; ++y) {
                 for (int x = 0; x < width_with_border; ++x) {
-                    velocityX[x, y] = velocityY[x, y] = density[x, y] = 0.0f;
+                    velocityX[x, y] = velocityY[x, y] = densityR[x, y] = densityG[x, y] = densityB[x, y] = 0.0f;
                 }
             }
         }
@@ -300,7 +331,7 @@ while (!Raylib.WindowShouldClose()) {
 
         if (1 <= c && c <= width && 1 <= r && r <= height) {  
             if (Raylib.IsMouseButtonDown(MouseButton.Left)) {
-                density[c, r] += Raylib.GetFrameTime() * densityAddedPerSecond; 
+                densityR[c, r] += Raylib.GetFrameTime() * densityAddedPerSecond; 
             }
                
             if (Raylib.IsKeyDown(KeyboardKey.W)) {
@@ -317,12 +348,17 @@ while (!Raylib.WindowShouldClose()) {
                 velocityX[c, r] += Raylib.GetFrameTime() * velocityAddedPerSecond;
             } 
         }
+
+        if (Raylib.IsFileDropped()) {
+            string[] files = Raylib.GetDroppedFiles();
+            LoadImage(width, height, files[0], densityR, densityG, densityB);
+        }
     }
     
-
-    timeSinceFixedUpdate += Raylib.GetFrameTime();
-    
-    const float fixedUpdatesPerSecond = 60.0f;
+    if (Raylib.IsWindowFocused()) {
+        timeSinceFixedUpdate += Raylib.GetFrameTime();
+    }  
+ 
     const float fixedUpdateDelta = 1.0f / fixedUpdatesPerSecond;
     while (timeSinceFixedUpdate >= fixedUpdateDelta) {
         Simulate(fixedUpdateDelta);
@@ -338,8 +374,11 @@ while (!Raylib.WindowShouldClose()) {
 
     for (int r = 0; r < height_with_border; ++r) {
         for (int c = 0; c < width_with_border; ++c) {
-            int intensity = (int)float.Clamp(density[c, r] * byte.MaxValue, 0, byte.MaxValue);
-            Color colour = new(intensity, 0, 0);
+            Color colour = new(
+                (int)float.Clamp(densityR[c, r] * byte.MaxValue, 0.0f, byte.MaxValue),
+                (int)float.Clamp(densityG[c, r] * byte.MaxValue, 0.0f, byte.MaxValue),
+                (int)float.Clamp(densityB[c, r] * byte.MaxValue, 0.0f, byte.MaxValue)
+            );
 
             Vector2 pos = cellSize * new Vector2(c, r);
             Rectangle cell = new(pos, cellSize);
@@ -378,7 +417,6 @@ while (!Raylib.WindowShouldClose()) {
     Raylib.EndDrawing();
 }
 Raylib.CloseWindow();
-
 readonly struct Grid<T> { 
     readonly int width;
     readonly T[] array;    
