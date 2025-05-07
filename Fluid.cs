@@ -66,6 +66,41 @@ static void Advect(BoundaryMode mode, int w, int h, float dt, Grid<float> veloci
     }
     SetBoundary(mode, w, h, output);
 }
+static void Project(int w, int h, Grid<float> velocityX, Grid<float> velocityY, Grid<float> tempDivergance, Grid<float> tempPressure) {
+    float a = 1.0f; // a = 1.0f / N
+    for (int r = 1; r <= h; ++r) {
+        for (int c = 1; c <= w; ++c) {
+            tempDivergance[c, r] = -0.5f * a * (
+                +velocityX[c + 1, r] - velocityX[c - 1, r]
+                +velocityY[c, r + 1] - velocityY[c, r - 1]
+            );
+            tempPressure[c, r] = 0.0f;
+        }
+    }
+    SetBoundary(BoundaryMode.Normal, w, h, tempDivergance);
+    SetBoundary(BoundaryMode.Normal, w, h, tempPressure);
+
+    for (int iter = 0; iter < iteration_count; ++iter) {
+        for (int r = 1; r <= h; ++r) {
+            for (int c = 1; c <= w; ++c) {
+                tempPressure[c, r] = 0.25f * (
+                    tempDivergance[c, r] + 
+                    tempPressure[c + 1, r] + tempPressure[c - 1, r] + 
+                    tempPressure[c, r + 1] + tempPressure[c, r - 1]
+                );
+            }
+        }
+    }
+
+    for (int r = 1; r <= h; ++r) {
+        for (int c = 1; c <= w; ++c) {
+            velocityX[c, r] -= 0.5f / a * (tempPressure[c + 1, r] - tempPressure[c - 1, r]);
+            velocityY[c, r] -= 0.5f / a * (tempPressure[c, r + 1] - tempPressure[c, r - 1]);
+        }
+    }
+    SetBoundary(BoundaryMode.VelocityX, w, h, velocityX);
+    SetBoundary(BoundaryMode.VelocityX, w, h, velocityY);
+}
 
 Grid<float> density   = new(width_with_border, height_with_border, 0);
 Grid<float> velocityX = new(width_with_border, height_with_border, 0);
@@ -80,19 +115,17 @@ void Simulate(float dt) {
     Advect(BoundaryMode.Normal, width, height, dt, velocityX, velocityY, density, tempX);
     (density, tempX) = (tempX, density);
 
-
     Diffuse(BoundaryMode.VelocityX, width, height, dt, velocity_viscosity_rate, velocityX, tempX);
     Diffuse(BoundaryMode.VelocityY, width, height, dt, velocity_viscosity_rate, velocityY, tempY);
     (velocityX, tempX) = (tempX, velocityX);
     (velocityY, tempY) = (tempY, velocityY);
-    
-    // TODO: Project
+    Project(width, height, velocityX, velocityY, tempX, tempY);
+
     Advect(BoundaryMode.VelocityX, width, height, dt, velocityX, velocityY, velocityX, tempX);
     Advect(BoundaryMode.VelocityY, width, height, dt, velocityX, velocityY, velocityY, tempY);
     (velocityX, tempX) = (tempX, velocityX);
     (velocityY, tempY) = (tempY, velocityY);
-    // TODO: Project
-
+    Project(width, height, velocityX, velocityY, tempX, tempY);
 }
 
 Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
