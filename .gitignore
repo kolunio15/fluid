@@ -1,0 +1,5 @@
+Obj/
+Bin/
+*.vs/
+*.vscode/
+*.user
