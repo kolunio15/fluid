@@ -82,6 +82,8 @@ const int iteration_count = 20;
 static void Diffuse(Grid<bool> wall, BoundaryMode mode, int w, int h, float dt, float diffusion_rate, Grid<float> input, Grid<float> output) {
     float a = dt * diffusion_rate; // a = dt * diff * w * h
 
+    output.Fill(0);
+
     for (int iter = 0; iter < iteration_count; ++iter) {
         for (int r = 1; r <= h; ++r) {
             for (int c = 1; c <= w; ++c) {
