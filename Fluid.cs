@@ -53,6 +53,36 @@ while (!Raylib.WindowShouldClose()) {
     Vector2 gridOffset = Vector2.Zero;
     Vector2 cellSize = new Vector2(int.Min(w, h)) / new Vector2(width_with_border, height_with_border);
 
+
+    // User input
+    {
+        Vector2 cell = (Raylib.GetMousePosition() - gridOffset) / cellSize;
+        int c = (int)cell.X;
+        int r = (int)cell.Y;
+
+        if (1 <= c && c <= width && 1 <= r && r <= height) {  
+            if (Raylib.IsMouseButtonDown(MouseButton.Left)) {
+                density[c, r] += Raylib.GetFrameTime() * 100.0f; 
+            }
+
+            if (Raylib.IsKeyDown(KeyboardKey.W)) {
+                velocityY[c, r] += Raylib.GetFrameTime() * 100.0f;
+            }
+            if (Raylib.IsKeyDown(KeyboardKey.S)) {
+                velocityY[c, r] -= Raylib.GetFrameTime() * 100.0f;
+            } 
+            
+            if (Raylib.IsKeyDown(KeyboardKey.A)) {
+                velocityX[c, r] -= Raylib.GetFrameTime() * 100.0f;
+            } 
+            if (Raylib.IsKeyDown(KeyboardKey.D)) {
+                velocityX[c, r] += Raylib.GetFrameTime() * 100.0f;
+            } 
+        }
+    }
+    
+
+
     Simulate();
 
     Raylib.BeginDrawing();
@@ -60,10 +90,11 @@ while (!Raylib.WindowShouldClose()) {
 
     Raylib.ClearBackground(Color.White);
 
+
     for (int r = 0; r < height_with_border; ++r) {
         for (int c = 0; c < width_with_border; ++c) {
-            byte intensity = (byte)float.Clamp(density[c, r] * byte.MaxValue, 0, byte.MaxValue);
-            Color colour = new(intensity, intensity, intensity);
+            int intensity = (int)float.Clamp(density[c, r] * byte.MaxValue, 0, byte.MaxValue);
+            Color colour = new(intensity, 0, 0);
 
             Vector2 pos = cellSize * new Vector2(c, r);
 
@@ -72,6 +103,19 @@ while (!Raylib.WindowShouldClose()) {
             Raylib.DrawRectangleLinesEx(cell, 1.0f, new(50, 50, 50));
         }
     }
+
+    for (int r = 0; r < height_with_border; ++r) {
+        for (int c = 0; c < width_with_border; ++c) {
+            Vector2 center = cellSize * new Vector2(c + 0.5f, r + 0.5f);
+            Vector2 vel = new(velocityX[c, r], velocityY[c, r]);
+            float len = vel.Length();
+            if (len > 0) {
+                Vector2 dir = vel * (cellSize.X * 0.5f / len);
+                dir.Y = -dir.Y;
+                Raylib.DrawLineV(center, center + dir, Color.Blue);
+            } 
+        }
+     }
 
     Raylib.EndDrawing();
 }
