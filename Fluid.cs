@@ -8,6 +8,7 @@ const int width_with_border  = width + 2;
 const int height_with_border = height + 2;
 
 const float density_diffusion_rate = 10.0f;
+const float velocity_viscosity_rate = 5.0f;
 
 
 static void SetBoundary(BoundaryMode mode, int w, int h, Grid<float> in_out) {
@@ -46,8 +47,25 @@ static void Diffuse(BoundaryMode mode, int w, int h, float dt, float diffusion_r
         SetBoundary(mode, w, h, output);
     }
 }
+static void Advect(BoundaryMode mode, int w, int h, float dt, Grid<float> velocityX, Grid<float> velocityY, Grid<float> input, Grid<float> output) {
+    for (int r = 1; r <= h; ++r) {
+        for (int c = 1; c <= w; ++c) {
+            float x = float.Clamp(c - dt * velocityX[c, r], 0.5f, w + 0.5f);
+            float y = float.Clamp(r - dt * velocityY[c, r], 0.5f, h + 0.5f);
 
+            int c0 = (int)x; int c1 = c0 + 1;
+            int r0 = (int)y; int r1 = r0 + 1;
 
+            float s1 = x - c0; float s0 = 1 - s1;
+            float t1 = y - r0; float t0 = 1 - t1;
+
+            output[c, r] = 
+                s0 * (t0 * input[c0, r0] + t1 * input[c0, r1]) +
+                s1 * (t0 * input[c1, r0] + t1 * input[c1, r1]);
+        }
+    }
+    SetBoundary(mode, w, h, output);
+}
 
 Grid<float> density   = new(width_with_border, height_with_border, 0);
 Grid<float> velocityX = new(width_with_border, height_with_border, 0);
@@ -59,6 +77,22 @@ Grid<float> tempY     = new(width_with_border, height_with_border, 0);
 void Simulate(float dt) {
     Diffuse(BoundaryMode.Normal, width, height, dt, density_diffusion_rate, density, tempX);
     (density, tempX) = (tempX, density);
+    Advect(BoundaryMode.Normal, width, height, dt, velocityX, velocityY, density, tempX);
+    (density, tempX) = (tempX, density);
+
+
+    Diffuse(BoundaryMode.VelocityX, width, height, dt, velocity_viscosity_rate, velocityX, tempX);
+    Diffuse(BoundaryMode.VelocityY, width, height, dt, velocity_viscosity_rate, velocityY, tempY);
+    (velocityX, tempX) = (tempX, velocityX);
+    (velocityY, tempY) = (tempY, velocityY);
+    
+    // TODO: Project
+    Advect(BoundaryMode.VelocityX, width, height, dt, velocityX, velocityY, velocityX, tempX);
+    Advect(BoundaryMode.VelocityY, width, height, dt, velocityX, velocityY, velocityY, tempY);
+    (velocityX, tempX) = (tempX, velocityX);
+    (velocityY, tempY) = (tempY, velocityY);
+    // TODO: Project
+
 }
 
 Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
@@ -84,10 +118,10 @@ while (!Raylib.WindowShouldClose()) {
             }
 
             if (Raylib.IsKeyDown(KeyboardKey.W)) {
-                velocityY[c, r] += Raylib.GetFrameTime() * 100.0f;
+                velocityY[c, r] -= Raylib.GetFrameTime() * 100.0f;
             }
             if (Raylib.IsKeyDown(KeyboardKey.S)) {
-                velocityY[c, r] -= Raylib.GetFrameTime() * 100.0f;
+                velocityY[c, r] += Raylib.GetFrameTime() * 100.0f;
             } 
             
             if (Raylib.IsKeyDown(KeyboardKey.A)) {
@@ -127,9 +161,9 @@ while (!Raylib.WindowShouldClose()) {
             Vector2 center = cellSize * new Vector2(c + 0.5f, r + 0.5f);
             Vector2 vel = new(velocityX[c, r], velocityY[c, r]);
             float len = vel.Length();
-            if (len > 0) {
+            if (len > 1e-10) {
                 Vector2 dir = vel * (cellSize.X * 0.5f / len);
-                dir.Y = -dir.Y;
+                Raylib.DrawLineV(center, center + dir * len, Color.Magenta);
                 Raylib.DrawLineV(center, center + dir, Color.Blue);
             } 
         }
