@@ -170,6 +170,7 @@ static void Project(Grid<bool> wall, int w, int h, Grid<float> velocityX, Grid<f
                 );
             }
         }
+        SetBoundary(wall, BoundaryMode.Normal, w, h, tempPressure);
     }
 
     for (int r = 1; r <= h; ++r) {
