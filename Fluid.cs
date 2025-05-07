@@ -1,15 +1,14 @@
 ﻿using Raylib_cs;
 using System.Numerics;
 
-const int width = 32;
-const int height = 32;
+const int width  = 64;
+const int height = 64;
 
 const int width_with_border  = width + 2;
 const int height_with_border = height + 2;
 
-const float density_diffusion_rate = 10.0f;
-const float velocity_viscosity_rate = 5.0f;
-
+const float density_diffusion_rate = 5.5f;
+const float velocity_viscosity_rate = 2.5f;
 
 static void SetBoundary(BoundaryMode mode, int w, int h, Grid<float> in_out) {
     for (int r = 1; r <= h; ++r) {
@@ -134,6 +133,21 @@ Raylib.InitWindow(800, 800, "WFI");
 
 float timeSinceFixedUpdate = 0.0f;
 
+float densityAddedPerSecond  = 100.0f;
+float velocityAddedPerSecond = 10000.0f;
+
+bool showHelp = true;
+bool showGrid = true;
+bool showVelocityField = true;
+
+string helpText = 
+"""
+F1 - show help
+F2 - show grid
+F3 - show velocity field
+R - reset
+""".ReplaceLineEndings("\n");
+
 while (!Raylib.WindowShouldClose()) {
     int w = Raylib.GetScreenWidth();
     int h = Raylib.GetScreenHeight();
@@ -142,30 +156,47 @@ while (!Raylib.WindowShouldClose()) {
     Vector2 gridOffset = Vector2.Zero;
     Vector2 cellSize = new Vector2(int.Min(w, h)) / new Vector2(width_with_border, height_with_border);
 
-
     // User input
     {
+        if (Raylib.IsKeyPressed(KeyboardKey.F1)) {
+            showHelp = !showHelp;
+        }
+        if (Raylib.IsKeyPressed(KeyboardKey.F2)) {
+            showGrid = !showGrid;
+        }
+        if (Raylib.IsKeyPressed(KeyboardKey.F3)) {
+            showVelocityField = !showVelocityField;
+        } 
+
+        if (Raylib.IsKeyPressed(KeyboardKey.R)) {
+            for (int y = 0; y < height_with_border; ++y) {
+                for (int x = 0; x < width_with_border; ++x) {
+                    velocityX[x, y] = velocityY[x, y] = density[x, y] = 0.0f;
+                }
+            }
+        }
+        
         Vector2 cell = (Raylib.GetMousePosition() - gridOffset) / cellSize;
         int c = (int)cell.X;
         int r = (int)cell.Y;
 
         if (1 <= c && c <= width && 1 <= r && r <= height) {  
             if (Raylib.IsMouseButtonDown(MouseButton.Left)) {
-                density[c, r] += Raylib.GetFrameTime() * 100.0f; 
+                density[c, r] += Raylib.GetFrameTime() * densityAddedPerSecond; 
             }
-
+            
             if (Raylib.IsKeyDown(KeyboardKey.W)) {
-                velocityY[c, r] -= Raylib.GetFrameTime() * 100.0f;
+                velocityY[c, r] -= Raylib.GetFrameTime() * velocityAddedPerSecond;
             }
             if (Raylib.IsKeyDown(KeyboardKey.S)) {
-                velocityY[c, r] += Raylib.GetFrameTime() * 100.0f;
+                velocityY[c, r] += Raylib.GetFrameTime() * velocityAddedPerSecond;
             } 
             
             if (Raylib.IsKeyDown(KeyboardKey.A)) {
-                velocityX[c, r] -= Raylib.GetFrameTime() * 100.0f;
+                velocityX[c, r] -= Raylib.GetFrameTime() * velocityAddedPerSecond;
             } 
             if (Raylib.IsKeyDown(KeyboardKey.D)) {
-                velocityX[c, r] += Raylib.GetFrameTime() * 100.0f;
+                velocityX[c, r] += Raylib.GetFrameTime() * velocityAddedPerSecond;
             } 
         }
     }
@@ -173,7 +204,8 @@ while (!Raylib.WindowShouldClose()) {
 
     timeSinceFixedUpdate += Raylib.GetFrameTime();
     
-    const float fixedUpdateDelta = 1.0f / 120.0f;
+    const float fixedUpdatesPerSecond = 60.0f;
+    const float fixedUpdateDelta = 1.0f / fixedUpdatesPerSecond;
     while (timeSinceFixedUpdate >= fixedUpdateDelta) {
         Simulate(fixedUpdateDelta);
         timeSinceFixedUpdate -= fixedUpdateDelta;
@@ -195,23 +227,32 @@ while (!Raylib.WindowShouldClose()) {
 
             Rectangle cell = new(pos, cellSize);
             Raylib.DrawRectangleRec(cell, colour);
-            Raylib.DrawRectangleLinesEx(cell, 1.0f, new(50, 50, 50));
+            if (showGrid) {
+                Raylib.DrawRectangleLinesEx(cell, 1.0f, new(50, 50, 50));
+            }
         }
     }
 
-    for (int r = 0; r < height_with_border; ++r) {
-        for (int c = 0; c < width_with_border; ++c) {
-            Vector2 center = cellSize * new Vector2(c + 0.5f, r + 0.5f);
-            Vector2 vel = new(velocityX[c, r], velocityY[c, r]);
-            float len = vel.Length();
-            if (len > 1e-10) {
-                Vector2 dir = vel * (cellSize.X * 0.5f / len);
-                Raylib.DrawLineV(center, center + dir * len, Color.Magenta);
-                Raylib.DrawLineV(center, center + dir, Color.Blue);
-            } 
+    if (showVelocityField) {
+        for (int r = 0; r < height_with_border; ++r) {
+            for (int c = 0; c < width_with_border; ++c) {
+                Vector2 center = cellSize * new Vector2(c + 0.5f, r + 0.5f);
+                Vector2 vel = new(velocityX[c, r], velocityY[c, r]);
+                float len = vel.Length();
+                if (len > 1e-10) {
+                    Vector2 dir = vel * (cellSize.X * 0.5f / len);
+                    Raylib.DrawLineV(center, center + vel * cellSize * 0.1f, Color.Magenta);
+                    // Raylib.DrawLineV(center, center + dir, Color.Blue);
+                } 
+            }
         }
-     }
+    }
 
+
+    if (showHelp) {
+        Raylib.DrawTextEx(Raylib.GetFontDefault(), helpText, gridOffset, 28.0f, 1.0f, Color.White);
+    }
+   
     Raylib.EndDrawing();
 }
 Raylib.CloseWindow();
