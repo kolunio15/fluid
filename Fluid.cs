@@ -130,6 +130,10 @@ void Simulate(float dt) {
 
 Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
 Raylib.InitWindow(800, 800, "WFI");
+
+
+float timeSinceFixedUpdate = 0.0f;
+
 while (!Raylib.WindowShouldClose()) {
     int w = Raylib.GetScreenWidth();
     int h = Raylib.GetScreenHeight();
@@ -167,8 +171,14 @@ while (!Raylib.WindowShouldClose()) {
     }
     
 
+    timeSinceFixedUpdate += Raylib.GetFrameTime();
+    
+    const float fixedUpdateDelta = 1.0f / 120.0f;
+    while (timeSinceFixedUpdate >= fixedUpdateDelta) {
+        Simulate(fixedUpdateDelta);
+        timeSinceFixedUpdate -= fixedUpdateDelta;
+    }    
 
-    Simulate(Raylib.GetFrameTime());
 
     Raylib.BeginDrawing();
     Raylib.IsWindowResized();
