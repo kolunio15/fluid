@@ -1,5 +1,6 @@
 ﻿using Raylib_cs;
 using System.Numerics;
+using System.Text;
 
 const int width  = 64;
 const int height = 64;
@@ -146,6 +147,8 @@ F1 - show help
 F2 - show grid
 F3 - show velocity field
 R - reset
+Q, E - change added density
+LCTRL, LSHIFT - change added velocity
 """.ReplaceLineEndings("\n");
 
 while (!Raylib.WindowShouldClose()) {
@@ -167,6 +170,22 @@ while (!Raylib.WindowShouldClose()) {
         if (Raylib.IsKeyPressed(KeyboardKey.F3)) {
             showVelocityField = !showVelocityField;
         } 
+        
+        if (Raylib.IsKeyPressed(KeyboardKey.E)) {
+            densityAddedPerSecond *= 10.0f;
+        }
+        if (Raylib.IsKeyPressed(KeyboardKey.Q)) {
+            densityAddedPerSecond /= 10.0f;
+        }
+        densityAddedPerSecond = float.Clamp(densityAddedPerSecond, 1.0f, 1e8f);
+        
+        if (Raylib.IsKeyPressed(KeyboardKey.LeftShift)) {
+            velocityAddedPerSecond *= 10.0f;
+        }
+        if (Raylib.IsKeyPressed(KeyboardKey.LeftControl)) {
+            velocityAddedPerSecond /= 10.0f;
+        }
+        velocityAddedPerSecond = float.Clamp(velocityAddedPerSecond, 1.0f, 1e8f);
 
         if (Raylib.IsKeyPressed(KeyboardKey.R)) {
             for (int y = 0; y < height_with_border; ++y) {
@@ -248,11 +267,12 @@ while (!Raylib.WindowShouldClose()) {
         }
     }
 
-
-    if (showHelp) {
-        Raylib.DrawTextEx(Raylib.GetFontDefault(), helpText, gridOffset, 28.0f, 1.0f, Color.White);
-    }
-   
+    StringBuilder sb = new();
+    if (showHelp) sb.Append(helpText);
+    sb.Append($"density to add: {densityAddedPerSecond}\n");
+    sb.Append($"velocity to add: {velocityAddedPerSecond}\n");
+        
+    Raylib.DrawTextEx(Raylib.GetFontDefault(), sb.ToString(), gridOffset, 28.0f, 1.0f, Color.White);
     Raylib.EndDrawing();
 }
 Raylib.CloseWindow();
