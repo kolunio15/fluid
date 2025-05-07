@@ -1,25 +1,16 @@
 ﻿using Raylib_cs;
 using System.Numerics;
 
-int width = 32;
-int height = 32;
+const int width = 32;
+const int height = 32;
 
-int width_with_border  = width + 2;
-int height_with_border = height + 2;
+const int width_with_border  = width + 2;
+const int height_with_border = height + 2;
 
-static void Simulate() {
-    DensityStep();
-    VelocityStep();
-}
+const float density_diffusion_rate = 10.0f;
 
-static void DensityStep() {
 
-}
-static void VelocityStep() {
-
-}
-
-static void SetBoundary(int w, int h, BoundaryMode mode, Grid<float> in_out) {
+static void SetBoundary(BoundaryMode mode, int w, int h, Grid<float> in_out) {
     for (int r = 1; r <= h; ++r) {
         in_out[    0, r] = mode == BoundaryMode.VelocityX ? -in_out[1, r] : in_out[1, r];
         in_out[w + 1, r] = mode == BoundaryMode.VelocityX ? -in_out[w, r] : in_out[w, r];
@@ -37,11 +28,38 @@ static void SetBoundary(int w, int h, BoundaryMode mode, Grid<float> in_out) {
     in_out[w + 1, h + 1] = 0.5f * (in_out[w, h + 1] + in_out[w + 1, h]);   
 }
 
+const int iteration_count = 20;
+static void Diffuse(BoundaryMode mode, int w, int h, float dt, float diffusion_rate, Grid<float> input, Grid<float> output) {
+    float a = dt * diffusion_rate; // a = dt * diff * w * h
+
+    for (int iter = 0; iter < iteration_count; ++iter) {
+        for (int r = 1; r <= h; ++r) {
+            for (int c = 1; c <= w; ++c) {
+                output[c, r] = (
+                    input[c, r] + a * (
+                        output[c - 1, r] + output[c + 1, r] + 
+                        output[c, r - 1] + output[c, r + 1]
+                    )
+                ) / (1 + 4 * a); 
+            }
+        }
+        SetBoundary(mode, w, h, output);
+    }
+}
+
+
+
 Grid<float> density   = new(width_with_border, height_with_border, 0);
 Grid<float> velocityX = new(width_with_border, height_with_border, 0);
 Grid<float> velocityY = new(width_with_border, height_with_border, 0);
 Grid<float> tempX     = new(width_with_border, height_with_border, 0);
 Grid<float> tempY     = new(width_with_border, height_with_border, 0);
+
+
+void Simulate(float dt) {
+    Diffuse(BoundaryMode.Normal, width, height, dt, density_diffusion_rate, density, tempX);
+    (density, tempX) = (tempX, density);
+}
 
 Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
 Raylib.InitWindow(800, 800, "WFI");
@@ -83,7 +101,7 @@ while (!Raylib.WindowShouldClose()) {
     
 
 
-    Simulate();
+    Simulate(Raylib.GetFrameTime());
 
     Raylib.BeginDrawing();
     Raylib.IsWindowResized();
