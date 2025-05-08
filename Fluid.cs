@@ -272,9 +272,8 @@ while (!Raylib.WindowShouldClose()) {
     int w = Raylib.GetScreenWidth();
     int h = Raylib.GetScreenHeight();
 
-    // TODO: Keep aspect ratio
+    Vector2 cellSize = new(float.Min((float)w / width_with_border, (float)h / height_with_border));
     Vector2 gridOffset = Vector2.Zero;
-    Vector2 cellSize = new Vector2(int.Min(w, h)) / new Vector2(width_with_border, height_with_border);
 
     // User input
     {
@@ -380,7 +379,7 @@ while (!Raylib.WindowShouldClose()) {
                 (int)float.Clamp(densityB[c, r] * byte.MaxValue, 0.0f, byte.MaxValue)
             );
 
-            Vector2 pos = cellSize * new Vector2(c, r);
+            Vector2 pos = gridOffset + cellSize * new Vector2(c, r);
             Rectangle cell = new(pos, cellSize);
             Raylib.DrawRectangleRec(cell, colour);
             if (showGrid) {
@@ -396,7 +395,7 @@ while (!Raylib.WindowShouldClose()) {
     if (showVelocityField) {
         for (int r = 0; r < height_with_border; ++r) {
             for (int c = 0; c < width_with_border; ++c) {
-                Vector2 center = cellSize * new Vector2(c + 0.5f, r + 0.5f);
+                Vector2 center = gridOffset + cellSize * new Vector2(c + 0.5f, r + 0.5f);
                 Vector2 vel = new(velocityX[c, r], velocityY[c, r]);
                 float len = vel.Length();
                 if (len > 1e-10) {
