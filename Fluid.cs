@@ -266,8 +266,11 @@ Slider diffusionRate = new("diffusion",       0.0f, 10.0f,     1.0f);
 Slider viscosityRate = new("viscosity",       0.0f, 10.0f,     1.0f);
 Slider densityToAdd  = new("density to add",  1.0f,   1e5f,   100.0f);
 Slider velocityToAdd = new("velocity to add", 1.0f,   1e8f, 10000.0f);
+Slider addColourR    = new("R",               0.0f,   1.0f,     1.0f);
+Slider addColourG    = new("G",               0.0f,   1.0f,     1.0f);
+Slider addColourB    = new("B",               0.0f,   1.0f,     1.0f);
 
-List<Slider> sliders = [diffusionRate, viscosityRate, densityToAdd, velocityToAdd];
+List<Slider> sliders = [diffusionRate, viscosityRate, densityToAdd, velocityToAdd, addColourR, addColourG, addColourB];
 
 while (!Raylib.WindowShouldClose()) {
     int w = Raylib.GetScreenWidth();
@@ -352,7 +355,10 @@ while (!Raylib.WindowShouldClose()) {
 
         if (1 <= c && c <= width && 1 <= r && r <= height) {  
             if (Raylib.IsMouseButtonDown(MouseButton.Left)) {
-                densityR[c, r] += Raylib.GetFrameTime() * densityToAdd.Value; 
+                float amount = Raylib.GetFrameTime() * densityToAdd.Value;
+                densityR[c, r] += addColourR.Value * amount; 
+                densityG[c, r] += addColourG.Value * amount; 
+                densityB[c, r] += addColourB.Value * amount; 
             }
                
             if (Raylib.IsKeyDown(KeyboardKey.W)) {
