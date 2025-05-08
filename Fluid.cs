@@ -2,7 +2,7 @@
 using System.Numerics;
 using System.Text;
 
-void LoadImage(int w, int h, string path, Grid<float> red, Grid<float> green, Grid<float> blue) {
+static void LoadImage(int w, int h, string path, Grid<float> red, Grid<float> green, Grid<float> blue) {
     Image image = Raylib.LoadImage(path);
 
     Raylib.ImageResize(ref image, w, h);
@@ -23,13 +23,10 @@ const float fixedUpdatesPerSecond = 60.0f;
 const int iteration_count = 12;
 
 const int width  = 100;
-const int height = 100;
+const int height = 120;
 
 const int width_with_border  = width + 2;
 const int height_with_border = height + 2;
-
-const float density_diffusion_rate = 0.0f;
-const float velocity_viscosity_rate = 2.5f;
 
 static void SetBoundary(Grid<bool> wall, BoundaryMode mode, int w, int h, Grid<float> in_out) {
     for (int r = 1; r <= h; ++r) {
@@ -216,9 +213,9 @@ Grid<float> tempY     = new(width_with_border, height_with_border, 0);
 
 
 
-void Simulate(float dt) {
+void Simulate(float dt, float diffusionRate, float viscosityRate) {
     void DiffuseStep(ref Grid<float> density, ref Grid<float> tempX) {
-        Diffuse(wall, BoundaryMode.Normal, width, height, dt, density_diffusion_rate, density, tempX);
+        Diffuse(wall, BoundaryMode.Normal, width, height, dt, diffusionRate, density, tempX);
         (density, tempX) = (tempX, density);
         Advect(wall, BoundaryMode.Normal, width, height, dt, velocityX, velocityY, density, tempX);
         (density, tempX) = (tempX, density);
@@ -228,8 +225,8 @@ void Simulate(float dt) {
     DiffuseStep(ref densityG, ref tempX);
     DiffuseStep(ref densityB, ref tempX);
     
-    Diffuse(wall, BoundaryMode.VelocityX, width, height, dt, velocity_viscosity_rate, velocityX, tempX);
-    Diffuse(wall, BoundaryMode.VelocityY, width, height, dt, velocity_viscosity_rate, velocityY, tempY);
+    Diffuse(wall, BoundaryMode.VelocityX, width, height, dt, viscosityRate, velocityX, tempX);
+    Diffuse(wall, BoundaryMode.VelocityY, width, height, dt, viscosityRate, velocityY, tempY);
     (velocityX, tempX) = (tempX, velocityX);
     (velocityY, tempY) = (tempY, velocityY);
     Project(wall, width, height, velocityX, velocityY, tempX, tempY);
@@ -242,13 +239,9 @@ void Simulate(float dt) {
 }
 
 Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
-Raylib.InitWindow(800, 800, "WFI");
-
+Raylib.InitWindow(1200, 800, "WFI");
 
 float timeSinceFixedUpdate = 0.0f;
-
-float densityAddedPerSecond  = 100.0f;
-float velocityAddedPerSecond = 10000.0f;
 
 bool showHelp = true;
 bool showGrid = false;
@@ -268,15 +261,40 @@ LCTRL, LSHIFT - change added velocity
 
 """.ReplaceLineEndings("\n");
 
+Slider diffusionRate = new("diffusion",       0.0f, 10.0f,     1.0f);
+Slider viscosityRate = new("viscosity",       0.0f, 10.0f,     1.0f);
+Slider densityToAdd  = new("density to add",  1.0f,   1e5f,   100.0f);
+Slider velocityToAdd = new("velocity to add", 1.0f,   1e8f, 10000.0f);
+
+List<Slider> sliders = [diffusionRate, viscosityRate, densityToAdd, velocityToAdd];
+
 while (!Raylib.WindowShouldClose()) {
     int w = Raylib.GetScreenWidth();
     int h = Raylib.GetScreenHeight();
 
+    
     Vector2 cellSize = new(float.Min((float)w / width_with_border, (float)h / height_with_border));
     Vector2 gridOffset = Vector2.Zero;
+    Vector2 gridSize = cellSize * new Vector2(width_with_border, height_with_border);
+    Vector2 windowSize = new(w, h);
+
+    // Gui layout
+    {
+        float padding = 10.0f;
+        float y = 0.0f;
+        float guiWidth = windowSize.X - gridSize.X - gridOffset.X -  2 * padding;
+        float sliderHeight = 40.0f;
+
+        foreach (Slider s in sliders) {
+            s.SetLayout(new(gridOffset.X + gridSize.X + padding, y), new(guiWidth, sliderHeight));
+            y += sliderHeight + padding;
+        }
+    }
 
     // User input
     {
+        foreach (Slider s in sliders) s.HandleMouse();
+
         if (Raylib.IsKeyPressed(KeyboardKey.F1)) {
             showHelp = !showHelp;
         }
@@ -288,20 +306,18 @@ while (!Raylib.WindowShouldClose()) {
         } 
         
         if (Raylib.IsKeyPressed(KeyboardKey.E)) {
-            densityAddedPerSecond *= 10.0f;
+            densityToAdd.Value *= 2.0f;
         }
         if (Raylib.IsKeyPressed(KeyboardKey.Q)) {
-            densityAddedPerSecond /= 10.0f;
+            densityToAdd.Value /= 2.0f;
         }
-        densityAddedPerSecond = float.Clamp(densityAddedPerSecond, 1.0f, 1e8f);
         
         if (Raylib.IsKeyPressed(KeyboardKey.LeftShift)) {
-            velocityAddedPerSecond *= 10.0f;
+            velocityToAdd.Value *= 2.0f;
         }
         if (Raylib.IsKeyPressed(KeyboardKey.LeftControl)) {
-            velocityAddedPerSecond /= 10.0f;
+            velocityToAdd.Value /= 2.0f;
         }
-        velocityAddedPerSecond = float.Clamp(velocityAddedPerSecond, 1.0f, 1e8f);
 
         if (Raylib.IsKeyPressed(KeyboardKey.R)) {
             for (int y = 0; y < height_with_border; ++y) {
@@ -330,21 +346,21 @@ while (!Raylib.WindowShouldClose()) {
 
         if (1 <= c && c <= width && 1 <= r && r <= height) {  
             if (Raylib.IsMouseButtonDown(MouseButton.Left)) {
-                densityR[c, r] += Raylib.GetFrameTime() * densityAddedPerSecond; 
+                densityR[c, r] += Raylib.GetFrameTime() * densityToAdd.Value; 
             }
                
             if (Raylib.IsKeyDown(KeyboardKey.W)) {
-                velocityY[c, r] -= Raylib.GetFrameTime() * velocityAddedPerSecond;
+                velocityY[c, r] -= Raylib.GetFrameTime() * velocityToAdd.Value;
             }
             if (Raylib.IsKeyDown(KeyboardKey.S)) {
-                velocityY[c, r] += Raylib.GetFrameTime() * velocityAddedPerSecond;
+                velocityY[c, r] += Raylib.GetFrameTime() * velocityToAdd.Value;
             } 
             
             if (Raylib.IsKeyDown(KeyboardKey.A)) {
-                velocityX[c, r] -= Raylib.GetFrameTime() * velocityAddedPerSecond;
+                velocityX[c, r] -= Raylib.GetFrameTime() * velocityToAdd.Value;
             } 
             if (Raylib.IsKeyDown(KeyboardKey.D)) {
-                velocityX[c, r] += Raylib.GetFrameTime() * velocityAddedPerSecond;
+                velocityX[c, r] += Raylib.GetFrameTime() * velocityToAdd.Value;
             } 
         }
 
@@ -360,7 +376,7 @@ while (!Raylib.WindowShouldClose()) {
  
     const float fixedUpdateDelta = 1.0f / fixedUpdatesPerSecond;
     while (timeSinceFixedUpdate >= fixedUpdateDelta) {
-        Simulate(fixedUpdateDelta);
+        Simulate(fixedUpdateDelta, diffusionRate.Value, viscosityRate.Value);
         timeSinceFixedUpdate -= fixedUpdateDelta;
     }    
 
@@ -407,10 +423,10 @@ while (!Raylib.WindowShouldClose()) {
         }
     }
 
+    foreach (Slider s in sliders) s.Draw();
+
     StringBuilder sb = new();
     if (showHelp) sb.Append(helpText);
-    sb.Append($"density to add: {densityAddedPerSecond}\n");
-    sb.Append($"velocity to add: {velocityAddedPerSecond}\n");
         
     Raylib.DrawTextEx(Raylib.GetFontDefault(), sb.ToString(), gridOffset, 28.0f, 1.0f, Color.White);
     Raylib.EndDrawing();
@@ -431,4 +447,53 @@ readonly struct Grid<T> {
 };
 
 enum BoundaryMode {Normal, VelocityX, VelocityY };
+
+class Slider(string name, float initialValue) {
+    public readonly float Min;
+    public readonly float Max;
+
+    public Slider(string name, float min, float max, float initialValue) : this(name, initialValue) {
+        Min = min;
+        Max = max;
+    }
+
+    float val = initialValue;
+    public float Value { get => val; set => val = float.Clamp(value, Min, Max); }
+
+    Vector2 position, size;
+    float sliderWidth;
+    float sliderHeight;
+    public void SetLayout(Vector2 position, Vector2 size) {
+        this.position = position;
+        this.size = size;
+
+        sliderWidth = 20.0f;
+        sliderHeight = size.Y;
+    }
+
+    public void Draw() {
+        Rectangle r = new(position, size);
+
+        float offset = (Value - Min) / (Max - Min) * (size.X - sliderWidth);
+        
+        Rectangle c = new(position.X + offset, position.Y + (size.Y - size.Y) * 0.5f, sliderWidth, sliderHeight);
+
+        Raylib.DrawRectangleRec(r, Color.Blue);
+        Raylib.DrawRectangleLinesEx(r, 1.0f, Color.DarkBlue);
+
+        Raylib.DrawRectangleRec(c, Color.Gold);
+        Raylib.DrawRectangleLinesEx(c, 1.0f, Color.Orange);
+
+        Raylib.DrawTextEx(Raylib.GetFontDefault(), $"{name}: {Value:F4}", position, size.Y, 1.0f, Color.Black);
+    }
+
+    public void HandleMouse() {
+        if (Raylib.IsMouseButtonDown(MouseButton.Left)) {
+            Vector2 mouse = Raylib.GetMousePosition() - position;
+            if (mouse.X >= 0.0f && mouse.X <= size.X && mouse.Y >= 0.0f && mouse.Y <= size.Y) {
+                Value = Min + (mouse.X - sliderWidth * 0.5f) / (size.X - sliderWidth) * (Max - Min);
+            }
+        }
+    }
+}
 
