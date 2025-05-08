@@ -259,6 +259,7 @@ RMB - add wall
 W,S,A,D - add velocity
 Q, E - change added density
 LCTRL, LSHIFT - change added velocity
+Drag and drop image to add its colour as density
 
 """.ReplaceLineEndings("\n");
 
@@ -394,8 +395,6 @@ while (!Raylib.WindowShouldClose()) {
 
 
     Raylib.BeginDrawing();
-    Raylib.IsWindowResized();
-
     Raylib.ClearBackground(Color.White);
 
 
