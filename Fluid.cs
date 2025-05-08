@@ -252,7 +252,8 @@ string helpText =
 F1 - show help
 F2 - show grid
 F3 - show velocity field
-R - reset
+R - reset fluid
+2 - reset walls
 LMB - add density
 RMB - add wall
 W,S,A,D - add velocity
@@ -320,11 +321,16 @@ while (!Raylib.WindowShouldClose()) {
         }
 
         if (Raylib.IsKeyPressed(KeyboardKey.R)) {
-            for (int y = 0; y < height_with_border; ++y) {
-                for (int x = 0; x < width_with_border; ++x) {
-                    velocityX[x, y] = velocityY[x, y] = densityR[x, y] = densityG[x, y] = densityB[x, y] = 0.0f;
-                }
-            }
+            densityR.Fill(0.0f);
+            densityG.Fill(0.0f);
+            densityB.Fill(0.0f);
+
+            velocityX.Fill(0.0f);
+            velocityY.Fill(0.0f);
+        }
+
+        if (Raylib.IsKeyPressed(KeyboardKey.Two)) {
+            wall.Fill(false);
         }
         
         Vector2 cell = (Raylib.GetMousePosition() - gridOffset) / cellSize;
